@@ -49,11 +49,15 @@ def viz(img, flo):
 
 def demo(args):
 
-    dims = [640, 512, 3]
+    dims = [args.width, args.height, 3]
     img_number_elements = dims[0]*dims[1]*dims[2]
-    number_frames = 20
+    number_frames = 0
     FLOAT_SIZE = 4
-
+    if args.frames==None :
+        number_frames = int(os.path.getsize(args.path)/img_number_elements)
+        print(number_frames)
+    else :
+        number_frames= int(args.frames)
 
     model = torch.nn.DataParallel(RAFT(args))
     model.load_state_dict(torch.load(args.model))
@@ -86,6 +90,11 @@ if __name__ == '__main__':
     parser.add_argument('--small', action='store_true', help='use small model')
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
+    parser.add_argument('--width', default=640, help='width of images in bin file')
+    parser.add_argument('--height', default=512, help='height of images in bin file')
+    parser.add_argument('--frames', default=None, help='Number of frames to process from the bin files')
+
+
     args = parser.parse_args()
 
     demo(args)

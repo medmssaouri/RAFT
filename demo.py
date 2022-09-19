@@ -10,6 +10,7 @@ import cv2
 import glob
 import numpy as np
 import torch
+torch.cuda.empty_cache()
 import matplotlib.pyplot as plt
 from PIL import Image
 
@@ -24,15 +25,26 @@ print(torch.cuda.get_device_name(0))
 DEVICE = 'cuda'
 FLOAT_SIZE = 4
 
-
+#load next image from bin file or video
 def load_image(file_path, image_nb_elements, idx, image_size, image_dims):
-    img = np.reshape(np.fromfile(file_path, 'float32', image_nb_elements, '', idx * image_size), image_dims)
-    img *= 255
-    img = np.transpose(img, (1, 0, 2))
-    img = img.astype(np.uint8)
-    img_ = img
-    img = torch.from_numpy(img).permute(2, 0, 1).float()
-    return img_, img[None].to(DEVICE)
+    if(file_path[-3:] == "bin"):   
+        img = np.reshape(np.fromfile(file_path, 'float32', image_nb_elements, '', idx * image_size), image_dims)
+        img *= 255
+        img = np.transpose(img, (1, 0, 2))
+        img = img.astype(np.uint8)
+        img_ = img
+        img = torch.from_numpy(img).permute(2, 0, 1).float()
+        return img_, img[None].to(DEVICE)
+    elif(file_path[-3:] == "mp4"):
+        vid = cv2.VideoCapture(file_path)
+        vid.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        res, frame = vid.read()
+        frame = frame.astype(np.uint8)
+        #frame = frame[:image_dims[0], :, :]
+        frame_ = frame
+        frame = torch.from_numpy(frame).permute(2, 0, 1).float()
+        vid.release()
+        return frame_, frame[None].to(DEVICE)
 
 
 def viz(img, flo):
@@ -48,14 +60,26 @@ def viz(img, flo):
 
 def demo(args):
 
-    dims = [args.width, args.height, 3]
-    img_number_elements = dims[0]*dims[1]*dims[2]
+    dims =[]
+    if(args.path[-3:] == 'bin'):
+        dims = [int(args.width), int(args.height), 3]
+    elif(args.path[-3:] == 'mp4'):
+        dims = [int(args.height), int(args.width), 3]
+
+    img_number_elements = int(dims[0])*int(dims[1])*int(dims[2])
     opticalflow_error = 1.
     opticalflow_diverge = [-32768, -32768]
     start_frame = 0
     end_frame =0
-    number_frames = int(os.path.getsize(args.path)/(img_number_elements*4))
 
+    #get number of frames in the file
+    if(args.path[-3:] == "bin"):
+        number_frames = int(os.path.getsize(args.path)/(img_number_elements*4))
+    elif(args.path[-3:] == "mp4"):
+        vid = cv2.VideoCapture(args.path)
+        number_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    #set start and end frame
     if args.start_frame==None and args.end_frame==None:
         start_frame = 0
         end_frame = number_frames

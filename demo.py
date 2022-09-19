@@ -108,10 +108,16 @@ def demo(args):
             flo_backward = viz(image2, flow_up_backward)
 
             #validate forward optical flow using backward optical flow
-            result_sub = flo_backward + flo_forward
+            result_sub = np.empty([int(args.height), int(args.width), 2])
+            for j, i in enumerate(np.ndindex(flo_forward.shape[:2])):
+                if (i[0] + int(flo_forward[i][0])) < int(args.height) and (i[1] + flo_forward[i][1])<int(args.width):
+                    result_sub[i] = flo_forward[i] + flo_backward[(tuple(i+flo_forward[i].astype(int)))]
+                else:
+                    result_sub[i] = opticalflow_diverge
             result_flow = [np.sqrt(np.dot(result_sub[i], result_sub[i])) for i in np.ndindex(result_sub.shape[:2])]
             result = [flo_forward[i] if result_flow[j] < opticalflow_error else opticalflow_diverge for j, i in enumerate(np.ndindex(result_sub.shape[:2]))]           
-            result = np.reshape(result, (args.height, args.width, 2))
+            result = np.reshape(result, (int(args.height), int(args.width), 2))
+
 
             #write bin file of processed images
             if args.processed_images:

@@ -58,6 +58,24 @@ def viz(img, flo):
     
     return flo_origin
 
+def bilinearInterpolationX(image, x, y, x1, y1, x2, y2):
+    if x1==x2 and y1==y2:
+        return image[int(y),int(x),1]
+    if y2 == y1:
+        return ((x2-x)/(x2-x1))*image[y1,x1,0]+((x-x1)/(x2-x1))*image[y1,x2,0]
+    if x2 == x1 and x1 == 511 and x2 == 511: 
+        return ((y2-y)/(y2-y1))*(image[y1,x1,0]) + ((y-y1)/(y2-y1))*(image[y2,x1,0])
+    return ((y2-y)/(y2-y1))*(((x2-x)/(x2-x1))*image[y1,x1,0]+((x-x1)/(x2-x1))*image[y1,x2,0]) + ((y-y1)/(y2-y1))*(((x2-x)/(x2-x1))*image[y2,x1,0] + ((x-x1)/(x2-x1))*image[y2,x2,0]) 
+
+def bilinearInterpolationY(image, x, y, x1, y1, x2, y2):
+    if x1==x2 and y1==y2:
+        return image[int(y),int(x),0]
+    if y2 == y1:
+        return ((x2-x)/(x2-x1))*image[y1,x1,0]+((x-x1)/(x2-x1))*image[y1,x2,0]
+    if x2 == x1 and x1 == 511 and x2 == 511: 
+        return ((y2-y)/(y2-y1))*(image[y1,x1,0]) + ((y-y1)/(y2-y1))*(image[y2,x1,0])
+    return ((y2-y)/(y2-y1))*(((x2-x)/(x2-x1))*image[y1,x1,1]+((x-x1)/(x2-x1))*image[y1,x2,1]) + ((y-y1)/(y2-y1))*(((x2-x)/(x2-x1))*image[y2,x1,1] + ((x-x1)/(x2-x1))*image[y2,x2,1]) 
+
 def demo(args):
 
     dims =[]
@@ -129,13 +147,18 @@ def demo(args):
             _, flow_up_backward = model(image2, image1, iters=20, test_mode=True)
 
             flo_forward = viz(image1, flow_up_forward)
+
             flo_backward = viz(image2, flow_up_backward)
 
             #validate forward optical flow using backward optical flow
             result_sub = np.empty([int(args.height), int(args.width), 2])
             for j, i in enumerate(np.ndindex(flo_forward.shape[:2])):
-                if (i[0] + int(flo_forward[i][0])) < int(args.height) and (i[1] + flo_forward[i][1])<int(args.width):
-                    result_sub[i] = flo_forward[i] + flo_backward[(tuple(i+flo_forward[i].astype(int)))]
+                if (i[0] + flo_forward[i][1]) < int(args.height) and (i[0] + flo_forward[i][1]) > -1 and (i[1] + flo_forward[i][0])<int(args.width) and (i[1] + flo_forward[i][0])>-1:
+                    fp = (i[0] + flo_forward[i][1], i[1] + flo_forward[i][0])            
+                    flowX = bilinearInterpolationX(flo_backward, fp[1], fp[0], int(fp[1]), min(int(fp[0]+1), int(args.height)-1), min(int(fp[1]+1), int(args.width)-1), int(fp[0]))
+                    flowY = bilinearInterpolationY(flo_backward, fp[1], fp[0], int(fp[1]), min(int(fp[0]+1), int(args.height)-1), min(int(fp[1]+1), int(args.width)-1), int(fp[0]))
+                    flowb = (flowX, flowY)
+                    result_sub[i] = [flo_forward[i][0] + flowb[0], flo_forward[i][1] + flowb[1]]
                 else:
                     result_sub[i] = opticalflow_diverge
             result_flow = [np.sqrt(np.dot(result_sub[i], result_sub[i])) for i in np.ndindex(result_sub.shape[:2])]
